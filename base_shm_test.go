@@ -1,1 +1,0 @@
-package shm_sdk_go

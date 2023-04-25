@@ -18,7 +18,7 @@ func TestShmData_GetHeader(t *testing.T) {
 	t.Log(header)
 }
 
-func TestShmData_Traverse(t *testing.T) {
+func TestShmData_Insert(t *testing.T) {
 	var shmData ShmData
 	err := shmData.Init(shmKey, maxNodeCount, true)
 	if err != nil {
@@ -34,6 +34,14 @@ func TestShmData_Traverse(t *testing.T) {
 		t.Fatalf("Insert failed, err: %s\n", err.Error())
 	}
 	t.Logf("insert count: %d\n", count)
+}
+
+func TestShmData_Traverse(t *testing.T) {
+	var shmData ShmData
+	err := shmData.Init(shmKey, maxNodeCount, true)
+	if err != nil {
+		t.Fatalf("Init failed, err: %s\n", err.Error())
+	}
 
 	err = shmData.Traverse(func(node *ShmDataNode) bool {
 		t.Logf("traverse node, a: %d, b: %d, c: %d, d: %d, e: %d\n",

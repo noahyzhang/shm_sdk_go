@@ -6,12 +6,13 @@ const (
 	sysShmCtl = syscall.SYS_SHMCTL
 	sysShmDt  = syscall.SYS_SHMDT
 	sysShmGet = syscall.SYS_SHMGET
+	sysSemGet = syscall.SYS_SEMGET
+	sysSemOp  = syscall.SYS_SEMOP
+	sysSemCtl = syscall.SYS_SEMCTL
 )
 
 // Perm is used to pass permission information to IPC operations.
 type Perm struct {
-	// Key.
-	Key int32
 	// Owner's user ID.
 	Uid uint32
 	// Owner's group ID.
@@ -25,11 +26,9 @@ type Perm struct {
 	// Sequence number.
 	Seq uint16
 	// Padding.
-	Pad1 uint16
-	// Reserved.
-	GlibcReserved1 uint64
-	// Reserved.
-	GlibcReserved2 uint64
+	PadCgo0 [2]byte
+	// Key.
+	Key int64
 }
 
 // IdDs describes shared memory segment.
@@ -38,20 +37,20 @@ type IdDs struct {
 	Perm Perm
 	// Size of segment in bytes.
 	SegSz uint64
+	// Pid of last shmat/shmdt.
+	Lpid int32
+	// Pid of creator.
+	Cpid int32
+	// Number of current attaches.
+	Nattch uint32
+	// Padding.
+	PadCgo0 [4]byte
 	// Last attach time.
 	Atime int64
 	// Last detach time.
 	Dtime int64
 	// Last change time.
 	Ctime int64
-	// Pid of creator.
-	Cpid int32
-	// Pid of last shmat/shmdt.
-	Lpid int32
-	// Number of current attaches.
-	Nattch uint64
-	// Reserved.
-	GlibcReserved5 uint64
-	// Reserved.
-	GlibcReserved6 uint64
+	// SysV stupidity
+	XShmInternal *byte
 }

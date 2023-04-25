@@ -49,7 +49,7 @@ const (
 	IPC_STAT = 2
 )
 
-func getShm(key int, size int, shmFlag int) (int, error) {
+func GetShm(key int, size int, shmFlag int) (int, error) {
 	id, _, err := syscall.Syscall(sysShmGet, uintptr(int32(key)), uintptr(int32(size)), uintptr(int32(shmFlag)))
 	if int(id) == -1 {
 		return -1, err
@@ -57,27 +57,28 @@ func getShm(key int, size int, shmFlag int) (int, error) {
 	return int(id), nil
 }
 
-func attachShm(shmId int, shmAddr uintptr, shmFlag int) ([]byte, error) {
+func AttachShm(shmId int, shmAddr uintptr, shmFlag int) (unsafe.Pointer, error) {
 	addr, _, err := syscall.Syscall(sysShmAt, uintptr(int32(shmId)), shmAddr, uintptr(int32(shmFlag)))
 	if int(addr) == -1 {
 		return nil, err
 	}
-	length, err2 := getShmSize(shmId)
-	if err2 != nil {
-		syscall.Syscall(sysShmDt, addr, 0, 0)
-		return nil, err2
-	}
-	var b = struct {
-		addr uintptr
-		len  int
-		cap  int
-	}{addr, int(length), int(length)}
-	data := *(*[]byte)(unsafe.Pointer(&b))
-	return data, nil
+	return unsafe.Pointer(addr), nil
+	//length, err2 := getShmSize(shmId)
+	//if err2 != nil {
+	//	syscall.Syscall(sysShmDt, addr, 0, 0)
+	//	return nil, err2
+	//}
+	//var b = struct {
+	//	addr uintptr
+	//	len  int
+	//	cap  int
+	//}{addr, int(length), int(length)}
+	//data := (*[]byte)(unsafe.Pointer(&b))
+	//return data, nil
 }
 
-func detachShm(data []byte) error {
-	res, _, err := syscall.Syscall(sysShmDt, uintptr(unsafe.Pointer(&data[0])), 0, 0)
+func DetachShm(data unsafe.Pointer) error {
+	res, _, err := syscall.Syscall(sysShmDt, uintptr(data), 0, 0)
 	if int(res) == -1 {
 		return err
 	}
@@ -92,7 +93,7 @@ func ctlShm(shmId int, cmd int, buf *IdDs) (int, error) {
 	return int(res), nil
 }
 
-func destroyShm(shmId int) error {
+func DestroyShm(shmId int) error {
 	_, err := ctlShm(shmId, IPC_RMID, nil)
 	return err
 }

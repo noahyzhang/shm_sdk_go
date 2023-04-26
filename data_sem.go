@@ -11,6 +11,15 @@ type Semaphore struct {
 
 func (s *Semaphore) Create(semKey uint32) error {
 	semSet, err := GetSemSet(int64(semKey), 1, &SemSetFlags{
+		Create:    false,
+		Exclusive: false,
+		Perms:     0666,
+	})
+	if err == nil {
+		s.semSet = semSet
+		return nil
+	}
+	semSet, err = GetSemSet(int64(semKey), 1, &SemSetFlags{
 		Create:    true,
 		Exclusive: true,
 		Perms:     0666,
@@ -19,26 +28,25 @@ func (s *Semaphore) Create(semKey uint32) error {
 		return fmt.Errorf("[Semaphore:Create] GetSemSet err: %s", err.Error())
 	}
 	s.semSet = semSet
+	if err = s.semSet.Setval(0, 1); err != nil {
+		return fmt.Errorf("[Semaphore:Create] Setval err: %s", err.Error())
+	}
 	return nil
 }
 
 func (s *Semaphore) Lock(isWait bool) error {
+	flag := SemOpFlags{DontWait: isWait, SemUnDo: true}
 	ops := NewSemOps()
-	if err := ops.Decrement(0, 1, nil); err != nil {
+	if err := ops.Decrement(0, 1, &flag); err != nil {
 		return fmt.Errorf("[Semaphore::Lock] Desrement err: %s", err.Error())
 	}
-	var tm time.Duration
-	if isWait == true {
-		tm = -1
-	} else {
-		tm = 0
-	}
-	return s.semSet.Run(ops, tm)
+	return s.semSet.Run(ops, time.Second)
 }
 
 func (s *Semaphore) Unlock() error {
+	flag := SemOpFlags{DontWait: false, SemUnDo: true}
 	ops := NewSemOps()
-	if err := ops.Increment(0, 1, nil); err != nil {
+	if err := ops.Increment(0, 1, &flag); err != nil {
 		return fmt.Errorf("[Semaphore::Unlock] Increment err: %s", err.Error())
 	}
 	return s.semSet.Run(ops, -1)

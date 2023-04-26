@@ -296,6 +296,7 @@ type SemOpFlags struct {
 	// DontWait causes calls that would otherwise block
 	// to instead fail with syscall.EAGAIN
 	DontWait bool
+	SemUnDo  bool
 }
 
 func (so *SemOpFlags) flags() int64 {
@@ -306,6 +307,9 @@ func (so *SemOpFlags) flags() int64 {
 	var f int64
 	if so.DontWait {
 		f |= int64(C.IPC_NOWAIT)
+	}
+	if so.SemUnDo {
+		f |= int64(C.SEM_UNDO)
 	}
 
 	return f

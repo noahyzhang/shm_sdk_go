@@ -1,3 +1,3 @@
-module shm_sdk_go
+module github.com/noahyzhang/shm_sdk_go
 
-go 1.19
+go 1.15

@@ -27,7 +27,9 @@ func TestShmData_Insert(t *testing.T) {
 	var nodes []ShmDataNode
 	var i uint64 = 0
 	for ; i < 10; i++ {
-		nodes = append(nodes, ShmDataNode{i, i, i, i, i})
+		nodes = append(nodes, ShmDataNode{
+			Tid: uint32(i), ArenaId: uint32(i),
+			AllocatedKB: uint32(i), DeallocatedKB: uint32(i)})
 	}
 	count, err := shmData.Insert(nodes)
 	if err != nil {
@@ -44,8 +46,8 @@ func TestShmData_Traverse(t *testing.T) {
 	}
 
 	err = shmData.Traverse(func(node *ShmDataNode) bool {
-		t.Logf("traverse node, a: %d, b: %d, c: %d, d: %d, e: %d\n",
-			node.a, node.b, node.c, node.d, node.e)
+		t.Logf("traverse node, a: %d, b: %d, c: %d, d: %d\n",
+			node.Tid, node.ArenaId, node.AllocatedKB, node.DeallocatedKB)
 		return true
 	})
 	if err != nil {

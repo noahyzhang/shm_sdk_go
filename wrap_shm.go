@@ -5,7 +5,6 @@ import (
 	"unsafe"
 )
 
-// Constants.
 const (
 	// Mode bits for `shmget`.
 
@@ -41,9 +40,9 @@ const (
 
 	// Control commands for `shmctl`.
 
-	// Remove identifier.
+	// remove identifier.
 	IPC_RMID = 0
-	// Set `ipc_perm` options.
+	// set `ipc_perm` options.
 	IPC_SET = 1
 	// Get `ipc_perm' options.
 	IPC_STAT = 2
@@ -63,18 +62,6 @@ func AttachShm(shmId int, shmAddr uintptr, shmFlag int) (unsafe.Pointer, error) 
 		return nil, err
 	}
 	return unsafe.Pointer(addr), nil
-	//length, err2 := getShmSize(shmId)
-	//if err2 != nil {
-	//	syscall.Syscall(sysShmDt, addr, 0, 0)
-	//	return nil, err2
-	//}
-	//var b = struct {
-	//	addr uintptr
-	//	len  int
-	//	cap  int
-	//}{addr, int(length), int(length)}
-	//data := (*[]byte)(unsafe.Pointer(&b))
-	//return data, nil
 }
 
 func DetachShm(data unsafe.Pointer) error {

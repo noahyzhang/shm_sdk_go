@@ -34,28 +34,28 @@ int semctl_val(int semid, int semnum, int cmd, int value) {
 */
 import "C"
 import (
-	"errors"
+	"fmt"
 	"time"
 )
 
-// SemaphoreSet is a kernel-maintained collection of semaphores.
-type SemaphoreSet struct {
+// sem_id 和 信号量个数
+type semaphoreSet struct {
 	id    int64
 	count uint
 }
 
-// GetSemSet creates or retrieves the semaphore set for a given IPC key.
-func GetSemSet(key, count int64, flags *SemSetFlags) (*SemaphoreSet, error) {
+// 创建或者获取信号量
+func getSemSet(key, count int64, flags *semSetFlags) (*semaphoreSet, error) {
 	rc, err := C.semget(C.key_t(key), C.int(count), C.int(flags.flags()))
 	if rc == -1 {
-		return nil, err
+		return nil, fmt.Errorf("[getSemSet] semget err: %v", err)
 	}
-	return &SemaphoreSet{int64(rc), uint(count)}, nil
+	return &semaphoreSet{int64(rc), uint(count)}, nil
 }
 
-// Run applies a group of SemOps atomically.
-func (ss *SemaphoreSet) Run(ops *SemOps, timeout time.Duration) error {
-	var cto *C.struct_timespec
+// 对信号量进行操作
+func (ss *semaphoreSet) run(ops *semOps, timeout time.Duration) error {
+	var cto *C.struct_timespec = nil
 	if timeout >= 0 {
 		cto = &C.struct_timespec{
 			tv_sec:  C.__time_t(timeout / time.Second),
@@ -75,31 +75,31 @@ func (ss *SemaphoreSet) Run(ops *SemOps, timeout time.Duration) error {
 	return nil
 }
 
-// Getval retrieves the value of a single semaphore in the set
-func (ss *SemaphoreSet) Getval(num uint16) (int, error) {
+// 获取某个信号量的值
+func (ss *semaphoreSet) getVal(num uint16) (int, error) {
 	val, err := C.semctl_noarg(C.int(ss.id), C.int(num), C.GETVAL)
 	if val == -1 {
-		return -1, err
+		return -1, fmt.Errorf("[semaphoreSet::getVal] semctl err: %v", err)
 	}
 	return int(val), nil
 }
 
-// Setval sets the value of a single semaphore in the set
-func (ss *SemaphoreSet) Setval(num uint16, value int) error {
+// 设置某个信号量的值
+func (ss *semaphoreSet) setVal(num uint16, value int) error {
 	val, err := C.semctl_val(C.int(ss.id), C.int(num), C.SETVAL, C.int(value))
 	if val == -1 {
-		return err
+		return fmt.Errorf("[semaphoreSet::setVal] semctl err: %v", err)
 	}
 	return nil
 }
 
-// Getall retrieves the values of all the semaphores in the set
-func (ss *SemaphoreSet) Getall() ([]uint16, error) {
+// 获取信号量集中的所有信号量的值
+func (ss *semaphoreSet) getAll() ([]uint16, error) {
 	carr := make([]C.ushort, ss.count)
 
 	rc, err := C.semctl_arr(C.int(ss.id), C.GETALL, &carr[0])
 	if rc == -1 {
-		return nil, err
+		return nil, fmt.Errorf("[semaphoreSet::getAll] semctl_arr err: %v", err)
 	}
 
 	results := make([]uint16, ss.count)
@@ -109,10 +109,10 @@ func (ss *SemaphoreSet) Getall() ([]uint16, error) {
 	return results, nil
 }
 
-// Setall sets the values of every semaphore in the set
-func (ss *SemaphoreSet) Setall(values []uint16) error {
+// 设置信号量集中的所有信号量的值
+func (ss *semaphoreSet) setAll(values []uint16) error {
 	if uint(len(values)) != ss.count {
-		return errors.New("sysvipc: wrong number of values for Setall")
+		return fmt.Errorf("[semaphoreSet::setAll] wrong number of values for setAll")
 	}
 
 	carr := make([]C.ushort, ss.count)
@@ -122,22 +122,22 @@ func (ss *SemaphoreSet) Setall(values []uint16) error {
 
 	rc, err := C.semctl_arr(C.int(ss.id), C.SETALL, &carr[0])
 	if rc == -1 {
-		return err
+		return fmt.Errorf("[semaphoreSet::setAll] semctl_arr err: %v", err)
 	}
 	return nil
 }
 
-// Getpid returns the last process id to operate on the num-th semaphore
-func (ss *SemaphoreSet) Getpid(num uint16) (int, error) {
+// 获取最后一个操作某个信号量的进程 ID
+func (ss *semaphoreSet) getPid(num uint16) (int, error) {
 	rc, err := C.semctl_noarg(C.int(ss.id), C.int(num), C.GETPID)
 	if rc == -1 {
-		return 0, err
+		return 0, fmt.Errorf("[semaphoreSet::getPid] semctl err: %v", err)
 	}
 	return int(rc), nil
 }
 
-// GetNCnt returns the # of those blocked Decrementing the num-th semaphore
-func (ss *SemaphoreSet) GetNCnt(num uint16) (int, error) {
+// 获取当前等待该信号量的值增长的进程数
+func (ss *semaphoreSet) getNCnt(num uint16) (int, error) {
 	rc, err := C.semctl_noarg(C.int(ss.id), C.int(num), C.GETNCNT)
 	if rc == -1 {
 		return 0, err
@@ -145,25 +145,25 @@ func (ss *SemaphoreSet) GetNCnt(num uint16) (int, error) {
 	return int(rc), nil
 }
 
-// GetZCnt returns the # of those blocked on WaitZero on the num-th semaphore
-func (ss *SemaphoreSet) GetZCnt(num uint16) (int, error) {
+// 获取当前等待该信号量的值变为 0 的进程数
+func (ss *semaphoreSet) getZCnt(num uint16) (int, error) {
 	rc, err := C.semctl_noarg(C.int(ss.id), C.int(num), C.GETZCNT)
 	if rc == -1 {
-		return 0, err
+		return 0, fmt.Errorf("[semaphoreSet::getZCnt] semctl err: %v", err)
 	}
 	return int(rc), nil
 }
 
-// Stat produces information about the semaphore set.
-func (ss *SemaphoreSet) Stat() (*SemSetInfo, error) {
+// 后去信号量集的信息
+func (ss *semaphoreSet) stat() (*semSetInfo, error) {
 	sds := C.struct_semid_ds{}
 
 	rc, err := C.semctl_buf(C.int(ss.id), C.IPC_STAT, &sds)
 	if rc == -1 {
-		return nil, err
+		return nil, fmt.Errorf("[semaphoreSet::stat] semctl err: %v", err)
 	}
 
-	ssinf := SemSetInfo{
+	ssinf := semSetInfo{
 		Perms: Perm{
 			Uid:  uint32(sds.sem_perm.uid),
 			Gid:  uint32(sds.sem_perm.gid),
@@ -178,8 +178,8 @@ func (ss *SemaphoreSet) Stat() (*SemSetInfo, error) {
 	return &ssinf, nil
 }
 
-// Set updates parameters of the semaphore set.
-func (ss *SemaphoreSet) Set(ssi *SemSetInfo) error {
+// 设置信号量集的信息
+func (ss *semaphoreSet) set(ssi *semSetInfo) error {
 	sds := &C.struct_semid_ds{
 		sem_perm: C.struct_ipc_perm{
 			uid:  C.__uid_t(ssi.Perms.Uid),
@@ -190,35 +190,35 @@ func (ss *SemaphoreSet) Set(ssi *SemSetInfo) error {
 
 	rc, err := C.semctl_buf(C.int(ss.id), C.IPC_SET, sds)
 	if rc == -1 {
-		return err
+		return fmt.Errorf("[semaphoreSet::set] semctl err: %v", err)
 	}
 	return nil
 }
 
-// Remove deletes the semaphore set.
-// This will also awake anyone blocked on the set with EIDRM.
-func (ss *SemaphoreSet) Remove() error {
+// 删除信号量集，将会唤醒所有被阻塞的进程
+func (ss *semaphoreSet) remove() error {
 	rc, err := C.semctl_noarg(C.int(ss.id), 0, C.IPC_RMID)
 	if rc == -1 {
-		return err
+		return fmt.Errorf("[semaphoreSet::remove] semctl err: %v", err)
 	}
 	return nil
 }
 
-// SemOps is a collection of operations submitted to SemaphoreSet.Run.
-type SemOps []C.struct_sembuf
+// 用于操作信号量的集合
+type semOps []C.struct_sembuf
 
-func NewSemOps() *SemOps {
-	sops := SemOps(make([]C.struct_sembuf, 0))
+// 创建一个操作信号量的集合
+func newSemOps() *semOps {
+	sops := semOps(make([]C.struct_sembuf, 0))
 	return &sops
 }
 
-// Increment adds an operation that will increase a semaphore's number.
-func (so *SemOps) Increment(num uint16, by int16, flags *SemOpFlags) error {
+// 信号量操作：增加信号量值
+func (so *semOps) increment(num uint16, by int16, flags *semOpFlags) error {
 	if by < 0 {
-		return errors.New("sysvipc: by must be >0. use Decrement")
+		return fmt.Errorf("[semOps::increment] param by must be > 0, use desrement")
 	} else if by == 0 {
-		return errors.New("sysvipc: by must be >0. use WaitZero")
+		return fmt.Errorf("[semOps::increment] param by must be > 0, use waitZero")
 	}
 
 	*so = append(*so, C.struct_sembuf{
@@ -229,8 +229,8 @@ func (so *SemOps) Increment(num uint16, by int16, flags *SemOpFlags) error {
 	return nil
 }
 
-// WaitZero adds and operation that will block until a semaphore's number is 0.
-func (so *SemOps) WaitZero(num uint16, flags *SemOpFlags) error {
+// 信号量操作：一直阻塞直到信号量的值为 0
+func (so *semOps) waitZero(num uint16, flags *semOpFlags) error {
 	*so = append(*so, C.struct_sembuf{
 		sem_num: C.ushort(num),
 		sem_op:  C.short(0),
@@ -239,10 +239,10 @@ func (so *SemOps) WaitZero(num uint16, flags *SemOpFlags) error {
 	return nil
 }
 
-// Decrement adds an operation that will decrease a semaphore's number.
-func (so *SemOps) Decrement(num uint16, by int16, flags *SemOpFlags) error {
+// 信号量操作：减小信号量值
+func (so *semOps) decrement(num uint16, by int16, flags *semOpFlags) error {
 	if by <= 0 {
-		return errors.New("sysvipc: by must be >0. use WaitZero or Increment")
+		return fmt.Errorf("[semOps::decrement] param by must be > 0, use waitZero or increment")
 	}
 
 	*so = append(*so, C.struct_sembuf{
@@ -253,29 +253,29 @@ func (so *SemOps) Decrement(num uint16, by int16, flags *SemOpFlags) error {
 	return nil
 }
 
-// SemSetInfo holds meta information about a semaphore set.
-type SemSetInfo struct {
+// 信号量集的元数据
+type semSetInfo struct {
 	Perms      Perm
 	LastOp     time.Time
 	LastChange time.Time
 	Count      uint
 }
 
-// SemSetFlags holds the options for a GetSemSet() call
-type SemSetFlags struct {
-	// Create controls whether to create the set if it doens't already exist.
+// 信号量获取的标识位
+type semSetFlags struct {
+	// 是否创建不存在的信号量集
 	Create bool
 
-	// Exclusive causes GetSemSet to fail if the semaphore set already exists
-	// (only useful with Create).
+	// 如果信号量集存在，则使用 Exclusive 会失败
+	// 仅仅在和 Create 一起使用时有效
 	Exclusive bool
 
-	// Perms is the file-style (rwxrwxrwx) permissions with which to create the
-	// semaphore set (also only useful with Create).
+	// 信号量集权限，只有和 Create 一起使用时有效
 	Perms int
 }
 
-func (sf *SemSetFlags) flags() int64 {
+// 获取标识位
+func (sf *semSetFlags) flags() int64 {
 	if sf == nil {
 		return 0
 	}
@@ -291,15 +291,17 @@ func (sf *SemSetFlags) flags() int64 {
 	return f
 }
 
-// SemOpFlags holds the options for SemOp methods
-type SemOpFlags struct {
-	// DontWait causes calls that would otherwise block
-	// to instead fail with syscall.EAGAIN
+// 信号量操作的标识位
+type semOpFlags struct {
+	// 操作是否阻塞，true 为不阻塞
 	DontWait bool
-	SemUnDo  bool
+
+	// 当操作的进程退出后，该进程对 sem 进行的操作将被取消
+	SemUnDo bool
 }
 
-func (so *SemOpFlags) flags() int64 {
+// 返回标识位
+func (so *semOpFlags) flags() int64 {
 	if so == nil {
 		return 0
 	}

@@ -41,19 +41,17 @@ func (sdh *ShmDataHeader) copy(other ShmDataHeader) {
 }
 
 type ShmDataNode struct {
-	a uint64
-	b uint64
-	c uint64
-	d uint64
-	e uint64
+	tid           uint32
+	arenaId       uint32
+	allocatedKB   uint32
+	deallocatedKB uint32
 }
 
 func (sdn *ShmDataNode) copy(other ShmDataNode) {
-	sdn.a = other.a
-	sdn.b = other.b
-	sdn.c = other.c
-	sdn.d = other.e
-	sdn.e = other.d
+	sdn.tid = other.tid
+	sdn.arenaId = other.arenaId
+	sdn.allocatedKB = other.allocatedKB
+	sdn.deallocatedKB = other.deallocatedKB
 }
 
 type ShmData struct {

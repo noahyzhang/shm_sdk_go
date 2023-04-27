@@ -1,5 +1,7 @@
 package shm_sdk_go
 
+import "syscall"
+
 // System call constants.
 const (
 	sysShmAt  = syscall.SYS_SHMAT

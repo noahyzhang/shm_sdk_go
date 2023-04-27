@@ -5,49 +5,6 @@ import (
 	"unsafe"
 )
 
-const (
-	// Mode bits for `shmget`.
-
-	// Create key if key does not exist.
-	IPC_CREAT = 01000
-	// Fail if key exists.
-	IPC_EXCL = 02000
-	// Return error on wait.
-	IPC_NOWAIT = 04000
-
-	// Special key values.
-
-	// Private key.
-	IPC_PRIVATE = 0
-
-	// Flags for `shmat`.
-
-	// Attach read-only access.
-	SHM_RDONLY = 010000
-	// Round attach address to SHMLBA.
-	SHM_RND = 020000
-	// Take-over region on attach.
-	SHM_REMAP = 040000
-	// Execution access.
-	SHM_EXEC = 0100000
-
-	// Commands for `shmctl`.
-
-	// Lock segment (root only).
-	SHM_LOCK = 1
-	// Unlock segment (root only).
-	SHM_UNLOCK = 12
-
-	// Control commands for `shmctl`.
-
-	// remove identifier.
-	IPC_RMID = 0
-	// set `ipc_perm` options.
-	IPC_SET = 1
-	// Get `ipc_perm' options.
-	IPC_STAT = 2
-)
-
 func GetShm(key int, size int, shmFlag int) (int, error) {
 	id, _, err := syscall.Syscall(sysShmGet, uintptr(int32(key)), uintptr(int32(size)), uintptr(int32(shmFlag)))
 	if int(id) == -1 {

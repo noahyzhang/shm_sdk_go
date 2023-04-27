@@ -34,7 +34,7 @@ func TestSemaphore_Lock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lock sem err: %s", err.Error())
 	}
-	err = sem.Lock(true)
+	err = sem.Lock(false)
 	if err != nil {
 		t.Logf("Repeated locking, timed out. res: %s", err.Error())
 	}

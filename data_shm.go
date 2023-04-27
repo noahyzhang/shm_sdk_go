@@ -11,11 +11,11 @@ const globalShmDataVersion uint32 = 0xFFFFFF01
 type TraverseNodeFunc func(*ShmDataNode) bool
 
 type ShmDataHeader struct {
-	version      uint32
-	curNodeCount uint32
-	maxNodeCount uint32
-	headerCRCVal uint32
-	timeNs       uint64
+	Version      uint32
+	CurNodeCount uint32
+	MaxNodeCount uint32
+	HeaderCRCVal uint32
+	TimeNs       uint64
 }
 
 func (sdh *ShmDataHeader) getSize() uint32 {
@@ -33,11 +33,11 @@ func (sdh *ShmDataHeader) convertIntegerArr() []uint8 {
 }
 
 func (sdh *ShmDataHeader) copy(other ShmDataHeader) {
-	sdh.version = other.version
-	sdh.curNodeCount = other.curNodeCount
-	sdh.maxNodeCount = other.maxNodeCount
-	sdh.headerCRCVal = other.headerCRCVal
-	sdh.timeNs = other.timeNs
+	sdh.Version = other.Version
+	sdh.CurNodeCount = other.CurNodeCount
+	sdh.MaxNodeCount = other.MaxNodeCount
+	sdh.HeaderCRCVal = other.HeaderCRCVal
+	sdh.TimeNs = other.TimeNs
 }
 
 type ShmDataNode struct {
@@ -82,7 +82,7 @@ func (sd *ShmData) getNodeSize() uint32 {
 
 func (sd *ShmData) Init(shmKey uint32, maxNodeCount uint32, isCreate bool) error {
 	if sd.isInit == true {
-		return fmt.Errorf("[CArrayShm::init] Already initialized, can't reinitialized")
+		return fmt.Errorf("[ShmData::Init] Already initialized, can't reinitialized")
 	}
 	shmBodyLen := maxNodeCount * sd.getNodeSize()
 	if isCreate == false {
@@ -95,9 +95,9 @@ func (sd *ShmData) Init(shmKey uint32, maxNodeCount uint32, isCreate bool) error
 	sd.shmBodyLength = shmBodyLen
 	sd.shmLength = sd.shmHeaderLength + sd.shmBodyLength
 
-	sd.localHeader.version = globalShmDataVersion
-	sd.localHeader.maxNodeCount = maxNodeCount
-	sd.localHeader.curNodeCount = 0
+	sd.localHeader.Version = globalShmDataVersion
+	sd.localHeader.MaxNodeCount = maxNodeCount
+	sd.localHeader.CurNodeCount = 0
 
 	headerPoint, err := sd.doAttach(sd.shmHeaderLength)
 	if err == nil && headerPoint != nil {
@@ -109,17 +109,17 @@ func (sd *ShmData) Init(shmKey uint32, maxNodeCount uint32, isCreate bool) error
 		length, err := sd.parseHeader(*(*ShmDataHeader)(headerPoint))
 		_ = sd.doDetach(headerPoint)
 		if err != nil || length == 0 {
-			return fmt.Errorf("[ShmData::init] parseHeader err: %s", err.Error())
+			return fmt.Errorf("[ShmData::Init] parseHeader err: %s", err.Error())
 		}
 		sd.shmLength = length
 		_ = sd.attach()
 	} else {
 		// 如果需要创建
 		if err = sd.create(); err != nil {
-			return fmt.Errorf("[ShmData::init] create err: %s", err.Error())
+			return fmt.Errorf("[ShmData::Init] create err: %s", err.Error())
 		}
 		if err = sd.setHeader(); err != nil {
-			return fmt.Errorf("[ShmData::init] setHeader err: %s", err.Error())
+			return fmt.Errorf("[ShmData::Init] setHeader err: %s", err.Error())
 		}
 	}
 	sd.isInit = true
@@ -128,21 +128,21 @@ func (sd *ShmData) Init(shmKey uint32, maxNodeCount uint32, isCreate bool) error
 
 func (sd *ShmData) Insert(arr []ShmDataNode) (uint32, error) {
 	if sd.isInit == false {
-		return 0, fmt.Errorf("[CArrayShm::insert] init might be mistaken")
+		return 0, fmt.Errorf("[ShmData::Insert] init might be mistaken")
 	}
 	var curNodeCount = len(arr)
-	if curNodeCount > int(sd.localHeader.maxNodeCount) {
-		arr = arr[:sd.localHeader.maxNodeCount]
+	if curNodeCount > int(sd.localHeader.MaxNodeCount) {
+		arr = arr[:sd.localHeader.MaxNodeCount]
 		curNodeCount = len(arr)
 	}
-	for i := 0; i < len(arr) && i < int(sd.localHeader.maxNodeCount); i++ {
+	for i := 0; i < len(arr) && i < int(sd.localHeader.MaxNodeCount); i++ {
 		node, err := sd.getNodeByPos(i)
 		if node == nil || err != nil {
-			return 0, fmt.Errorf("[CArrayShm::insert] getNodeByPos err: %s", err.Error())
+			return 0, fmt.Errorf("[ShmData::Insert] getNodeByPos err: %s", err.Error())
 		}
 		(*node).copy(arr[i])
 	}
-	sd.localHeader.curNodeCount = uint32(curNodeCount)
+	sd.localHeader.CurNodeCount = uint32(curNodeCount)
 	if err := sd.setHeader(); err != nil {
 		return 0, fmt.Errorf("[ShmData::Insert] setHeader err: %s", err.Error())
 	}
@@ -151,17 +151,23 @@ func (sd *ShmData) Insert(arr []ShmDataNode) (uint32, error) {
 
 func (sd *ShmData) Traverse(eachFunc TraverseNodeFunc) error {
 	if sd.isInit == false {
-		return fmt.Errorf("[CArrayShm::Traverse] init might be mistaken")
+		return fmt.Errorf("[ShmData::Traverse] init might be mistaken")
+	}
+	header, err := sd.GetHeader()
+	if err != nil {
+		return fmt.Errorf("[ShmData::Traverse] GetHeader err: %s", err.Error())
+	}
+	if _, err = sd.parseHeader(header); err != nil {
+		return fmt.Errorf("[ShmData::Traverse] parseHeader err: %s", err.Error())
 	}
 	var pNode *ShmDataNode = nil
-	var err error = nil
-	for i := 0; i < int(sd.localHeader.curNodeCount); i++ {
+	for i := 0; i < int(sd.localHeader.CurNodeCount); i++ {
 		pNode, err = sd.getNodeByPos(i)
 		if err != nil || pNode == nil {
-			return fmt.Errorf("[CArrayShm::Traverse] Failed to get node")
+			return fmt.Errorf("[ShmData::Traverse] Failed to get node")
 		}
 		if !eachFunc(pNode) {
-			return fmt.Errorf("[CArrayShm::Traverse] callback TRAVERSE_METHOD function return false")
+			return fmt.Errorf("[ShmData::Traverse] callback TraverseNodeFunc function return false")
 		}
 	}
 	return nil
@@ -169,7 +175,7 @@ func (sd *ShmData) Traverse(eachFunc TraverseNodeFunc) error {
 
 func (sd *ShmData) GetHeader() (ShmDataHeader, error) {
 	if sd.isInit == false {
-		return ShmDataHeader{}, fmt.Errorf("[CArrayShm::Traverse] init might be mistaken")
+		return ShmDataHeader{}, fmt.Errorf("[ShmData::GetHeader] init might be mistaken")
 	}
 	header, err := sd.doGetHeader()
 	if err != nil {
@@ -180,12 +186,12 @@ func (sd *ShmData) GetHeader() (ShmDataHeader, error) {
 
 func (sd *ShmData) create() error {
 	if !sd.isNeedCreate || sd.shmLength == 0 {
-		return fmt.Errorf("[CShm::create] isNeedCreate is false or shmLength is 0")
+		return fmt.Errorf("[ShmData::create] isNeedCreate is false or shmLength is 0")
 	}
 	flag := 0666 | IPC_CREAT
 	pShm, err := sd.getShmPointWithCreate(int(sd.shmKey), int(sd.shmLength), flag)
 	if err != nil || pShm == nil {
-		return fmt.Errorf("[CShm::create] getShmPointWithCreate err: %s", err.Error())
+		return fmt.Errorf("[ShmData::create] getShmPointWithCreate err: %s", err.Error())
 	}
 	sd.pShm = pShm
 	sd.shmHeader = (*ShmDataHeader)(pShm)
@@ -194,7 +200,7 @@ func (sd *ShmData) create() error {
 		addr uintptr
 		len  int
 		cap  int
-	}{shmBodyPoint, int(sd.localHeader.maxNodeCount), int(sd.localHeader.maxNodeCount)}
+	}{shmBodyPoint, int(sd.localHeader.MaxNodeCount), int(sd.localHeader.MaxNodeCount)}
 	sd.shmBody = (*[]ShmDataNode)(unsafe.Pointer(dummy))
 
 	sd.isAttach = true
@@ -202,38 +208,38 @@ func (sd *ShmData) create() error {
 }
 
 func (sd *ShmData) setHeader() error {
-	if sd.localHeader.maxNodeCount == 0 {
-		return fmt.Errorf("[ShmData::setHeader] maxNodeCount is 0")
+	if sd.localHeader.MaxNodeCount == 0 {
+		return fmt.Errorf("[ShmData::setHeader] MaxNodeCount is 0")
 	}
-	sd.localHeader.headerCRCVal = 0
-	sd.localHeader.timeNs = uint64(time.Now().UnixNano())
+	sd.localHeader.HeaderCRCVal = 0
+	sd.localHeader.TimeNs = uint64(time.Now().UnixNano())
 	crc, _ := CalcCRCVal(sd.localHeader.convertIntegerArr(), sd.localHeader.getSize())
-	sd.localHeader.headerCRCVal = crc
+	sd.localHeader.HeaderCRCVal = crc
 	sd.shmHeader.copy(sd.localHeader)
 	return nil
 }
 
 func (sd *ShmData) parseHeader(shmHeader ShmDataHeader) (uint32, error) {
-	if shmHeader.version != globalShmDataVersion {
-		return 0, fmt.Errorf("[ShmData::parseHeader] version check error")
+	if shmHeader.Version != globalShmDataVersion {
+		return 0, fmt.Errorf("[ShmData::parseHeader] Version check error")
 	}
 	sd.localHeader.copy(shmHeader)
-	sd.localHeader.headerCRCVal = 0
+	sd.localHeader.HeaderCRCVal = 0
 	crc, _ := CalcCRCVal(sd.localHeader.convertIntegerArr(), sd.localHeader.getSize())
-	sd.localHeader.headerCRCVal = shmHeader.headerCRCVal
-	if crc != shmHeader.headerCRCVal {
+	sd.localHeader.HeaderCRCVal = shmHeader.HeaderCRCVal
+	if crc != shmHeader.HeaderCRCVal {
 		return 0, fmt.Errorf("[ShmData::parseHeader] CRC calibration error")
 	}
-	return sd.localHeader.maxNodeCount*sd.getNodeSize() + sd.getHeaderSize(), nil
+	return sd.localHeader.MaxNodeCount*sd.getNodeSize() + sd.getHeaderSize(), nil
 }
 
 func (sd *ShmData) attach() error {
 	if sd.isNeedCreate || sd.shmLength == 0 {
-		return fmt.Errorf("[CShm::attach] shm not initialized")
+		return fmt.Errorf("[ShmData::attach] shm not initialized")
 	}
 	pShm, err := sd.doAttach(sd.shmLength)
 	if err != nil || pShm == nil {
-		return fmt.Errorf("[CShm::attach] doAttach err: %s", err.Error())
+		return fmt.Errorf("[ShmData::attach] doAttach err: %s", err.Error())
 	}
 	sd.pShm = pShm
 	sd.shmHeader = (*ShmDataHeader)(pShm)
@@ -243,7 +249,7 @@ func (sd *ShmData) attach() error {
 		addr uintptr
 		len  int
 		cap  int
-	}{shmBodyPoint, int(sd.localHeader.maxNodeCount), int(sd.localHeader.maxNodeCount)}
+	}{shmBodyPoint, int(sd.localHeader.MaxNodeCount), int(sd.localHeader.MaxNodeCount)}
 	sd.shmBody = (*[]ShmDataNode)(unsafe.Pointer(dummy))
 	sd.isAttach = true
 	return nil
@@ -251,10 +257,10 @@ func (sd *ShmData) attach() error {
 
 func (sd *ShmData) detach() error {
 	if !sd.isAttach {
-		return fmt.Errorf("[CShm::detach] not attach shm")
+		return fmt.Errorf("[ShmData::detach] not attach shm")
 	}
 	if err := sd.doDetach(sd.pShm); err != nil {
-		return fmt.Errorf("[CShm::detach] doDetach err: %s", err.Error())
+		return fmt.Errorf("[ShmData::detach] doDetach err: %s", err.Error())
 	}
 	return nil
 }
@@ -263,14 +269,14 @@ func (sd *ShmData) doAttach(length uint32) (unsafe.Pointer, error) {
 	var flag = 0666
 	pShm, err := sd.getShmPoint(int(sd.shmKey), int(length), flag)
 	if err != nil || pShm == nil {
-		return nil, fmt.Errorf("[CShm::doAttach] getShmPoint err: %s", err.Error())
+		return nil, fmt.Errorf("[ShmData::doAttach] getShmPoint err: %s", err.Error())
 	}
 	return pShm, nil
 }
 
 func (sd *ShmData) doDetach(pShm unsafe.Pointer) error {
 	if err := DetachShm(pShm); err != nil {
-		return fmt.Errorf("[CShm::doDetach] detach err: %s", err.Error())
+		return fmt.Errorf("[ShmData::doDetach] detach err: %s", err.Error())
 	}
 	return nil
 }
@@ -293,32 +299,32 @@ func (sd *ShmData) doGetHeader() (ShmDataHeader, error) {
 
 func (sd *ShmData) getShmPoint(shmKey int, shmSize int, flag int) (unsafe.Pointer, error) {
 	if shmKey == 0 {
-		return nil, fmt.Errorf("[CShm::getShmPoint] Param shmKey is 0")
+		return nil, fmt.Errorf("[ShmData::getShmPoint] Param shmKey is 0")
 	}
 	shmId, err := GetShm(shmKey, shmSize, flag)
 	if err != nil || shmId < 0 {
-		return nil, fmt.Errorf("[CShm::getShmPoint] GetShm err: %s", err.Error())
+		return nil, fmt.Errorf("[ShmData::getShmPoint] GetShm err: %s", err.Error())
 	}
 	pShm, err := AttachShm(shmId, 0, 0)
 	if err != nil {
-		return nil, fmt.Errorf("[CShm::getShmPoint] AttachShm err: %s", err.Error())
+		return nil, fmt.Errorf("[ShmData::getShmPoint] AttachShm err: %s", err.Error())
 	}
 	return pShm, nil
 }
 
 func (sd *ShmData) getShmPointWithCreate(shmKey int, shmSize int, flag int) (unsafe.Pointer, error) {
 	if shmKey == 0 {
-		return nil, fmt.Errorf("[CShm::getShmPointWithCreate] Param shmKey is 0")
+		return nil, fmt.Errorf("[ShmData::getShmPointWithCreate] Param shmKey is 0")
 	}
 	pShm, err := sd.getShmPoint(shmKey, shmSize, flag&(^IPC_CREAT))
 	if err != nil || pShm == nil {
 		if (flag & IPC_CREAT) == 0 {
-			return nil, fmt.Errorf("[CShm::getShmPointWithCreate] getShmPoint(flag: %d) err: %s",
+			return nil, fmt.Errorf("[ShmData::getShmPointWithCreate] getShmPoint(flag: %d) err: %s",
 				flag&(^IPC_CREAT), err.Error())
 		}
 		pShm, err = sd.getShmPoint(shmKey, shmSize, flag)
 		if err != nil || pShm == nil {
-			return nil, fmt.Errorf("[CShm::getShmPointWithCreate] getShmPoint(flag: %d) err: %s",
+			return nil, fmt.Errorf("[ShmData::getShmPointWithCreate] getShmPoint(flag: %d) err: %s",
 				flag, err.Error())
 		}
 		return pShm, nil

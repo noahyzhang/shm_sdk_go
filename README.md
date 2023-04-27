@@ -45,7 +45,7 @@ import (
 )
 
 var SHM_KEY uint32 = 0x5c9f
-var MAX_SHM_ARR_COUNT uint32 = 100
+var MAX_SHM_ARR_COUNT uint32 = 500
 var SEM_KEY uint32 = 0xcc9f
 
 func main() {
@@ -62,19 +62,29 @@ func main() {
 
 	for {
 		// 非阻塞
-		if err := sem.Lock(false); err != nil {
+		if err := sem.Lock(true); err != nil {
 			fmt.Printf("sem Lock err: %s\n", err.Error())
 			time.Sleep(time.Second)
 			continue
 		}
-		err := shm.Traverse(func(node *shm_sdk_go.ShmDataNode) bool {
+		header, err := shm.GetHeader()
+		if err != nil {
+			_ = sem.Unlock()
+			fmt.Printf("shm GetHeader err: %s\n", err.Error())
+			continue
+		}
+		fmt.Printf("header: version: %d, cur_node_count: %d, max_node_count: %d, time_ns: %v, crc: %d\n",
+			header.Version, header.CurNodeCount, header.MaxNodeCount, header.TimeNs, header.HeaderCRCVal)
+		err = shm.Traverse(func(node *shm_sdk_go.ShmDataNode) bool {
 			fmt.Println("node: ", node.Tid, node.ArenaId, node.AllocatedKB, node.DeallocatedKB)
 			return true
 		})
 		if err != nil {
+			_ = sem.Unlock()
 			fmt.Printf("shm Traverse err: %s\n", err.Error())
 			return
 		}
+		fmt.Println()
 		if err = sem.Unlock(); err != nil {
 			fmt.Printf("sem Unlock err: %s\n", err.Error())
 			time.Sleep(time.Second)
@@ -82,6 +92,9 @@ func main() {
 		}
 		time.Sleep(time.Second)
 	}
-
 }
 ```
+
+### 四、注意
+
+1. 注意时间，共享内存中的头部中有"时间字段"，请判断时间，如果和当前时间相差太远，就说明这个数据是过期数据，需要酬情处理
